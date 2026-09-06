@@ -12,3 +12,5 @@ Console.WriteLine($"Каталог застосунку: {AppContext.BaseDirecto
 Console.WriteLine($"Поточний каталог  : {Environment.CurrentDirectory}");
 Console.WriteLine(new string('-', 52));
 Console.WriteLine("Предметна область: (a) Склад (товари, партії, залишки, переміщення)");
+
+Console.ReadKey();
