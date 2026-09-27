@@ -1,7 +1,7 @@
 ﻿using Core;
 using Core.Dto;
+using Core.Domain;
 using Core.Import;
-
 
 EnvironmentReport report = EnvironmentInfo.Collect();
 
@@ -10,41 +10,67 @@ Console.WriteLine(new string('-', 52));
 Console.WriteLine($"ОС (OSDescription)  : {report.OsDescription}");
 Console.WriteLine($"Runtime             : {report.FrameworkDescription}");
 Console.WriteLine($"Архітектура процесу : {report.ProcessArchitecture}");
-Console.WriteLine($"RID (визначено)     : {report.DetectedRid}");
-Console.WriteLine($"RID (від .NET)      : {report.ReportedRid}");
-Console.WriteLine($"Примітка збірки     : {report.BuildNote}");
-Console.WriteLine($"Каталог застосунку  : {report.BaseDirectory}");
 Console.WriteLine(new string('-', 52));
-Console.WriteLine("Предметна область   : (a) Склад творчих товарів\n");
+Console.WriteLine("Лабораторна робота №4: Доменна модель Складу творчих товарів\n");
 
-
+//  DTO - Domain
 string path = args.Length > 0 ? args[0] : Path.Combine("data", "sample.csv");
 
-if (!File.Exists(path))
+if (File.Exists(path))
 {
-    Console.WriteLine($"Помилка: файл не знайдено за шляхом -> {Path.GetFullPath(path)}");
-    return 1;
-}
-
-ImportResult<ProductDto> result = ProductCsvImporter.Load(path);
-
-Console.WriteLine("=== Результати імпорту складу творчих товарів ===");
-Console.WriteLine($"Успішно завантажено записів: {result.Items.Count}");
-Console.WriteLine(new string('-', 65));
-
-foreach (ProductDto p in result.Items.Take(5))
-{
-    Console.WriteLine($" {p.Id,-8} {p.Sku,-10} {p.Name,-30} {p.Quantity,4} шт.");
-}
-
-Console.WriteLine(new string('-', 65));
-
-if (result.Errors.Count > 0)
-{
-    Console.WriteLine($"Пропущено пошкоджених рядків: {result.Errors.Count}");
-    foreach (string err in result.Errors)
+    ImportResult<object> result = Path.GetExtension(path).ToLowerInvariant() switch
     {
-        Console.WriteLine($"  ! {err}");
+        ".json" => ProductJsonImporter.Load(path),
+        ".csv" or _ => ProductCsvImporter.Load(path)
+    };
+
+    Console.WriteLine($"=== Результати імпорту з файлу ({Path.GetExtension(path).ToUpperInvariant()}) ===");
+    foreach (var item in result.Items.Take(3))
+    {
+        if (item is ProductDto p)
+        {
+            
+            try
+            {
+                var domainProduct = Product.FromDto(p);
+                Console.WriteLine($" Успішно відновлено з DTO: {domainProduct}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($" Помилка відновлення DTO: {ex.Message}");
+            }
+        }
+    }
+    Console.WriteLine(new string('-', 65) + "\n");
+}
+
+// 7
+Console.WriteLine("=== Сценарій 1: Успішна робота з доменною сутністю ===");
+Product product = Product.Create("ART-100", "CR-A-01", "Акрилова фарба (ультрамарин)", "шт", 50);
+Console.WriteLine($" Початковий стан: {product}");
+
+product.RegisterArrival(30);
+Console.WriteLine($" Після приходу (+30): {product}");
+
+product.Issue(20);
+Console.WriteLine($" Після видачі (-20): {product}\n");
+
+Console.WriteLine("=== Сценарій 2: Порушення інваріантів (try/catch) ===");
+TryDo("Видача більша за залишок (перевитрата)", () => product.Issue(1000));
+TryDo("Створення з порожнім SKU", () => Product.Create("ART-101", "", "Пензель", "шт", 10));
+TryDo("Створення з від'ємним початковим залишком", () => Product.Create("ART-102", "SKU-02", "Полотно", "шт", -5));
+
+static void TryDo(string title, Action action)
+{
+    try
+    {
+        action();
+        Console.WriteLine($"  [!] {title}: виняток НЕ спрацював!");
+    }
+    catch (Exception ex)
+    {
+        
+        Console.WriteLine($"  [OK] {title} -> {ex.GetType().Name}: {ex.Message}");
     }
 }
 
