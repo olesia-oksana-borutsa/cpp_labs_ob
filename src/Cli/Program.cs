@@ -1,123 +1,146 @@
-﻿using Core;
+﻿using System.Diagnostics;
+using Core;
 using Core.Abstractions;
 using Core.Domain;
-using Core.Dto;
-using Core.Import;
 using Core.Services;
 using Core.Storage;
-using Core.Events; 
+using Core.Events;
+using Core.Import;
+using Core.Dto;
+using Core.Reports;
+
 
 ICatalogStore store = StoreFactory.Create(args);
 var service = new CatalogService(store);
 
-/* 5 
-Console.WriteLine("=== Лабораторна робота №5: Сервісний шар та сховища ===");
-Console.WriteLine($"Підключене сховище: {store.GetType().Name}\n");
-
-Console.WriteLine("--- 1. Список усіх товарів у сховищі ---");
-PrintCatalog(service.All());
-
-Console.WriteLine("\n--- 2. Додавання нового товару та прихід ---");
-var created5 = service.Add("SKU-999", "Маркери художні (набір)", "наб", 10);
-Console.WriteLine($"Створено товар: {created5.Id} | {created5.Sku} | {created5.Name}");
-
-service.Receive(created5.Id, 15);
-Console.WriteLine($"Після приходу (+15): {service.Find(created5.Id)}");
-
-Console.WriteLine("\n--- 3. Пошук за параметром Func<Product, bool> (Завдання 2) ---");
-Console.WriteLine(" Товари із залишком >= 25:");
-var highQuantityProducts = service.Find(p => p.Quantity >= 25);
-PrintCatalog(highQuantityProducts);
-
-Console.WriteLine("\n--- 4. Демонстрація сценаріїв відмови (try/catch) ---");
-TryDo("Спроба приходу для неіснуючого ID", () => service.Receive("NON-EXISTENT-ID", 10));
-TryDo("Спроба видачі більше за наявний залишок", () => service.Issue(created5.Id, 1000));
-TryDo("Спроба додати дублікат ID", () => store.Add(Product.Create("ART-001", "CR-A-01", "Фарба-дублікат", "шт", 10)));
-================================================================ */
 
 
+var items = service.All(); 
+var command = args.FirstOrDefault(a => !a.StartsWith("--")) ?? "report-top"; 
 
 
-Console.WriteLine("=== Лабораторна робота №6: Події та делегати ===");
-
-
-var logPath = Path.Combine(AppContext.BaseDirectory, "logs", "app.log");
-Directory.CreateDirectory(Path.GetDirectoryName(logPath)!); 
-
-void OnCatalogChanged(object? sender, CatalogChangedEventArgs e)
+if (command == "report-top" && args.Length == 0)
 {
-    var line = $"{e.At:HH:mm:ss} {e.Kind,-8} {e.Id} {e.Delta,4:+0;-0} -> залишок {e.QuantityAfter}";
-    Console.WriteLine(line);
-    File.AppendAllText(logPath, line + Environment.NewLine);
-}
+    Console.WriteLine("=== Лабораторна робота №7: Демонстрація відкладеного виконання ===\n");
 
-service.Changed += OnCatalogChanged;
+    var sourceList = service.All().ToList(); 
+    var query = sourceList.Where(p => p.Quantity < 10);
 
+    Console.WriteLine($"1. Дефіцитних до змін у джерелі: {query.Count()}"); 
+    foreach (var p in query) 
+        Console.WriteLine($"   - [{p.Sku}] {p.Name,-20} (Залишок: {p.Quantity} {p.Unit})");
 
-int changes = 0;
-service.Changed += (_, _) => changes++; 
+    Console.WriteLine("\n  НОВИЙ ТОВАР: 'Скоба' (Залишок: 3)");
+    sourceList.Add(Product.Create("tmp00001", "SKU-999", "Скоба", "шт", 3)); 
 
-
-var created = service.Add("ART-101", "Скетчбук для графіки А5", "шт", 50);
-service.Receive(created.Id, 25);
-Console.WriteLine($"Подій отримано: {changes}");
-
-
-
-service.Changed -= OnCatalogChanged;
+    Console.WriteLine($"\n2. Дефіцитних після змін : {query.Count()}"); 
+    foreach (var p in query) 
+        Console.WriteLine($"   - [{p.Sku}] {p.Name,-20} (Залишок: {p.Quantity} {p.Unit})");
 
 
-service.Receive(created.Id, 5); 
-Console.WriteLine($"Подій отримано: {changes}"); // +1 лише від лямбди-лічильника
+    var snapshot = query.ToList(); 
+    sourceList.Clear(); 
 
+    Console.WriteLine($"\n3. У знімку  лишилось після очищення: {snapshot.Count}"); 
+    foreach (var p in snapshot) 
+        Console.WriteLine($"   - [{p.Sku}] {p.Name,-20} (Залишок: {p.Quantity} {p.Unit})");
 
-
-Console.WriteLine("\n--- Спроба помилкової операції (Сценарій відмови) ---");
-try
-{
-    
-    service.Receive("NON-EXISTENT", 10);
-}
-catch (Exception ex)
-{
-    Console.WriteLine($"Помилка: {ex.Message}");
+    Console.WriteLine("\n===================================================================\n");
 }
 
 
-// --- Крок 7: Делегат замість події там, де потрібне значення ---
-Console.WriteLine("\n--- Делегат Func (пошук) ---");
-var lowStock = service.FindAll(p => p.Quantity < 10);
-Console.WriteLine($"Знайдено товарів із залишком < 10: {lowStock.Count}");
+
+switch (command)
+{ 
+    case "report-top":    
+        Console.WriteLine("Звіти (LINQ)");
+        Print(ReportService.TopByQuantity(items, 5)); 
+        break; 
+
+    case "report-low":    
+        Console.WriteLine("Звіти (LINQ) - Дефіцит:");
+        Print(ReportService.LowStock(items, 10)); 
+        break; 
+
+    case "report-groups": 
+        Console.WriteLine("Звіти (LINQ) - Групування:");
+        foreach (var g in ReportService.ByUnit(items)) 
+            Console.WriteLine($"  {g.Key,-6} позицій: {g.Count,3}  сумарно: {g.TotalQuantity,6}"); 
+        break; 
+
+    case "report-sum": 
+        Console.WriteLine("Звіти (LINQ) - Загальна статистика:");
+        var t = ReportService.Totals(items); 
+        Console.WriteLine($"  позицій {t.Items}, всього {t.Total}, середнє {t.Average:F2}, макс {t.Max}"); 
+        break; 
+
+    // Дод завдання 1
+    case "report-join":
+        Console.WriteLine("Звіти (LINQ) - З'єднання колекцій:");
+        var pList = items.Take(5).ToList(); 
+        var movements = new List<Movement> 
+        {
+            new Movement(pList[0].Id, 10, "Прибуток"),
+            new Movement(pList[0].Id, -2, "Списання"),
+            new Movement(pList[1].Id, 5,  "Прибуток"),
+            new Movement(pList[2].Id, 50, "Прибуток"),
+            new Movement(pList[2].Id, -15, "Видача")
+        };
+        var joined = ReportService.ProductMovements(pList, movements);
+        foreach (var m in joined)
+            Console.WriteLine($"  [{m.Sku,-8}] Операція: {m.Operation,-10} Зміна: {m.Delta,4:+0;-0}");
+        break;
 
 
-// ================================================================
+   // Дод завдання 4 
+    case "report-perf":
+        Console.WriteLine("Звіти (LINQ) - Тест швидкодії:");
+        Console.WriteLine("Генерація 100 000 записів у пам'яті...");
+        var largeSource = Enumerable.Range(1, 100000)
+            .Select(i => Product.Create(Guid.NewGuid().ToString("N")[..8], $"SKU-{i}", $"Товар {i}", "шт", i % 100))
+            .ToList();
 
-if (!Console.IsInputRedirected)
-{
-    Console.WriteLine("\nНатисніть будь-яку клавішу для виходу...");
-    try { Console.ReadKey(); } catch { }
+        // Прогрів JIT 
+        _ = largeSource.Where(p => p.Quantity > 50).Take(1).ToList();
+
+        var sw = new Stopwatch();
+
+        //= БЕЗ ToList
+        int counter1 = 0;
+        sw.Start();
+        var query1 = largeSource
+            .Where(p => { counter1++; return p.Quantity > 50; })
+            .Take(1000) 
+            .ToList();
+        sw.Stop();
+        long t1 = sw.ElapsedTicks; 
+
+        //  З проміжним ToList 
+        int counter2 = 0;
+        sw.Restart();
+        var query2 = largeSource
+            .Where(p => { counter2++; return p.Quantity > 50; })
+            .ToList()   
+            .Take(1000)
+            .ToList();
+        sw.Stop();
+        long t2 = sw.ElapsedTicks;
+
+        Console.WriteLine("\n[Без проміжного ToList()]");
+        Console.WriteLine($"  Витрачено часу : {t1} тіків процесора");
+        Console.WriteLine($"  Викликів Where : {counter1} разів (LINQ зупинився, як тільки знайшов 1000 елементів)");
+
+        Console.WriteLine("\n[З проміжним ToList()]");
+        Console.WriteLine($"  Витрачено часу : {t2} тіків процесора (значно повільніше)");
+        Console.WriteLine($"  Викликів Where : {counter2} разів (ToList змусив перебрати всі 100 000 елементів)");
+        break;
 }
 
 return 0;
 
-// Допоміжні методи з минулих лаб (просто залишаємо внизу, вони не заважають)
-static void PrintCatalog(IEnumerable<Product> products)
-{
-    foreach (var p in products)
-    {
-        Console.WriteLine($" [{p.Id}] {p.Sku,-10} {p.Name,-25} {p.Quantity,4} {p.Unit}");
-    }
-}
 
-static void TryDo(string title, Action action)
-{
-    try
-    {
-        action();
-        Console.WriteLine($"  [!] {title}: виняток НЕ спрацював!");
-    }
-    catch (Exception ex)
-    {
-        Console.WriteLine($"  [OK] {title} -> {ex.GetType().Name}: {ex.Message}");
-    }
+static void Print(IReadOnlyList<StockLine> lines) 
+{ 
+    foreach (var l in lines) 
+        Console.WriteLine($"  {l.Sku,-10} {l.Name,-22} {l.Quantity,6} {l.Unit}"); 
 }
