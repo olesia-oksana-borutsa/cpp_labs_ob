@@ -79,19 +79,17 @@ public class CatalogServiceTests
         var service = new CatalogService(new InMemoryCatalogStore());
 
 
-        
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => service.ImportAsync(new JsonCatalogImporter(), "any.json", cts.Token));
+       await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.ImportAsync(new JsonCatalogImporter(), "any.json", null, cts.Token));
     }
 
-    //  6: Перевірка доменного винятку на "поганому" файлі
+    //  6: Перевірка доменного винятку на неправильному файлі
     [Fact]
     public async Task ImportAsync_WithInvalidData_ThrowsDomainException()
     {
         
         var tempFile = Path.GetTempFileName();
 
-        //  товару від'ємна кількість
 
         var invalidJson = "[{\"Id\":\"invalid-1\",\"Sku\":\"TEST\",\"Name\":\"A\",\"Unit\":\"шт\",\"Quantity\":-10}]";
         
@@ -102,8 +100,7 @@ public class CatalogServiceTests
 
 
             var ex = await Assert.ThrowsAsync<DomainException>(
-                () => service.ImportAsync(new JsonCatalogImporter(), tempFile, CancellationToken.None));
-            
+                () => service.ImportAsync(new JsonCatalogImporter(), tempFile, null, CancellationToken.None));
             
             Assert.Contains("Запис 1", ex.Message);
         }
@@ -114,4 +111,30 @@ public class CatalogServiceTests
                 File.Delete(tempFile);
         }
     }
+
+    // Дод 2:
+    [Fact]
+    public async Task ImportAsync_WithLinkedToken_ThrowsOnTimeout()
+    {
+        
+        using var userCts = new CancellationTokenSource();
+        
+        using var timeoutCts = new CancellationTokenSource();
+        
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(userCts.Token, timeoutCts.Token);
+
+
+        timeoutCts.Cancel(); 
+
+        var service = new CatalogService(new InMemoryCatalogStore());
+
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => service.ImportAsync(new JsonCatalogImporter(), "any.json", null, linkedCts.Token));
+
+
+        Assert.True(timeoutCts.IsCancellationRequested);
+        Assert.False(userCts.IsCancellationRequested);
+    }
+
 }

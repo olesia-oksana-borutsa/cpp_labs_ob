@@ -1,3 +1,4 @@
+using System.Globalization;
 using Core.Dto;
 
 namespace Core.Import;
@@ -6,9 +7,9 @@ public static class ProductCsvImporter
 {
     private const char Separator = ';';
 
-    public static ImportResult<ProductDto> Load(string path)
+    public static ImportResult<object> Load(string path, Action<string>? onRowSkipped = null)
     {
-        var items = new List<ProductDto>();
+        var items = new List<object>();
         var errors = new List<string>();
 
         string[] lines = File.ReadAllLines(path);
@@ -21,21 +22,34 @@ public static class ProductCsvImporter
             if (string.IsNullOrWhiteSpace(line) || line.StartsWith('#'))
                 continue;
 
-            if (number == 1 && line.StartsWith("id", StringComparison.OrdinalIgnoreCase))
+
+            string cleanLine = line.TrimStart('\uFEFF', ' ').Trim();
+
+
+            if (cleanLine.StartsWith("id", StringComparison.OrdinalIgnoreCase) || 
+                cleanLine.Contains("sku", StringComparison.OrdinalIgnoreCase) || 
+                cleanLine.Contains("category", StringComparison.OrdinalIgnoreCase))
                 continue;
 
-            switch (ParseLine(line))
+            switch (ParseLine(cleanLine))
             {
-                case ParseOk ok:
-                    items.Add(ok.Value);
+                case ParseProductOk prod:
+                    items.Add(prod.Value);
+                    break;
+                case ParseWarehouseOk wh:
+                    items.Add(wh.Value);
                     break;
                 case ParseFailed failed:
-                    errors.Add($"рядок {number}: {failed.Reason}");
+                    string errorMsg = $"рядок {number}: {failed.Reason}";
+                    errors.Add(errorMsg);
+                    
+                    
+                    onRowSkipped?.Invoke(errorMsg); 
                     break;
             }
         }
 
-        return new ImportResult<ProductDto>(items, errors);
+        return new ImportResult<object>(items, errors);
     }
 
     private static ParseOutcome ParseLine(string line)
@@ -44,17 +58,30 @@ public static class ProductCsvImporter
 
         return parts switch
         {
-            { Length: < 5 } => new ParseFailed($"очікую 5 колонок, отримав {parts.Length}"),
-            [_, "", _, _, _] or [_, _, "", _, _] => new ParseFailed("SKU або назва товару порожні"),
-            [var id, var sku, var name, var category, var qty] when !int.TryParse(qty, out int q) || q < 0
-                => new ParseFailed($"кількість '{qty}' не є невід'ємним числом"),
+            
+            [var id, var code, var title, var city] when string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(title)
+                => new ParseFailed("код або назва складу порожні"),
+            
+            [var id, var code, var title, var city]
+                => new ParseWarehouseOk(new WarehouseDto(id, code, title, city)),
+
+
+            [var id, var sku, var name, var category, var qty] when string.IsNullOrWhiteSpace(sku) || string.IsNullOrWhiteSpace(name)
+                => new ParseFailed("SKU або назва товару порожні"),
+            
+            [var id, var sku, var name, var category, var qty] when !int.TryParse(qty, NumberStyles.Integer, CultureInfo.InvariantCulture, out int q) || q < 0
+                => new ParseFailed($"кількість товару '{qty}' не є невід'ємним числом"),
+            
             [var id, var sku, var name, var category, var qty]
-                => new ParseOk(new ProductDto(id, sku, name, category, int.Parse(qty))),
-            _ => new ParseFailed($"занадто багато колонок: {parts.Length}")
+                => new ParseProductOk(new ProductDto(id, sku, name, category, int.Parse(qty, CultureInfo.InvariantCulture))),
+
+            { Length: < 4 } => new ParseFailed($"очікую мінімум 4 колонки, отримав {parts.Length}"),
+            _ => new ParseFailed($"невідомий формат рядка або забагато колонок")
         };
     }
 
     private abstract record ParseOutcome;
-    private sealed record ParseOk(ProductDto Value) : ParseOutcome;
+    private sealed record ParseProductOk(ProductDto Value) : ParseOutcome;
+    private sealed record ParseWarehouseOk(WarehouseDto Value) : ParseOutcome;
     private sealed record ParseFailed(string Reason) : ParseOutcome;
 }

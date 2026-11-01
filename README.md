@@ -104,3 +104,27 @@ dotnet test
 
 # Запуск конкретного тесту
 dotnet test --filter "Name~ImportAsync_WhenAlreadyCancelled_Throws"
+
+## Лабораторна робота 9: Конфігурація та Секрети
+
+### Профілі
+- **Development** (`appsettings.Development.json`): Детальне логування (`MinimumLevel: Debug`).
+- **Production** (`appsettings.json`): Базове логування (`MinimumLevel: Information`).
+
+### Таблиця ключів конфігурації
+| Ключ конфігурації | Змінна середовища (Bash) | Змінна середовища (PowerShell) |
+| :--- | :--- | :--- |
+| `Storage:DataPath` | `CROSSAPP_Storage__DataPath` | `$env:CROSSAPP_Storage__DataPath` |
+| `Storage:FileName` | `CROSSAPP_Storage__FileName` | `$env:CROSSAPP_Storage__FileName` |
+| `Logging:MinimumLevel`| `CROSSAPP_Logging__MinimumLevel` | `$env:CROSSAPP_Logging__MinimumLevel`|
+| `Integration:ApiKey` | `CROSSAPP_Integration__ApiKey` | `$env:CROSSAPP_Integration__ApiKey` |
+| *(спадкова змінна)* | `CROSSAPP_DATA_PATH` | `$env:CROSSAPP_DATA_PATH` |
+
+
+**PowerShell (Windows):**
+`$env:CROSSAPP_DATA_PATH="C:\Users\st\data"
+dotnet run --project src/Cli -- export`
+
+**cmd **
+set CROSSAPP_DATA_PATH=C:\custom_data
+dotnet run --project src/Cli -- export

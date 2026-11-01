@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using Core.Abstractions;
 using Core.Domain;
@@ -5,12 +6,23 @@ using Core.Dto;
 
 namespace Core.Storage;
 
-public sealed class FileCatalogStore(string path) : ICatalogStore
+public sealed class FileCatalogStore : ICatalogStore
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    };
+
     private readonly Dictionary<string, Product> _cache = new(StringComparer.OrdinalIgnoreCase);
-    private readonly string _path = Path.GetFullPath(path);
+    private readonly string _path;
     private bool _loaded;
+
+    public FileCatalogStore(string fullPath)
+    {
+        _path = Path.GetFullPath(fullPath);
+    }
 
     private void EnsureLoaded()
     {
@@ -18,7 +30,9 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
 
         if (File.Exists(_path))
         {
-            var dtos = JsonSerializer.Deserialize<List<ProductDto>>(File.ReadAllText(_path)) ?? [];
+            var json = File.ReadAllText(_path);
+            var dtos = JsonSerializer.Deserialize<List<ProductDto>>(json, Options) ?? [];
+            _cache.Clear();
             foreach (var dto in dtos)
             {
                 var p = Product.FromDto(dto);
@@ -30,8 +44,16 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
 
     private void Flush()
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-        File.WriteAllText(_path, JsonSerializer.Serialize(_cache.Values.Select(p => p.ToDto()).ToList(), Options));
+        var dtos = _cache.Values.Select(p => p.ToDto()).ToList();
+        var dir = Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        var tmp = _path + ".tmp";
+        File.WriteAllText(tmp, JsonSerializer.Serialize(dtos, Options));
+        File.Move(tmp, _path, overwrite: true);
     }
 
     public IReadOnlyList<Product> List()
@@ -44,6 +66,13 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
     {
         EnsureLoaded();
         return _cache.GetValueOrDefault(id);
+    }
+
+    public IReadOnlyList<Product> Find(Func<Product, bool> predicate)
+    {
+        EnsureLoaded();
+        _cache.Values.Where(predicate).ToList();
+        return _cache.Values.Where(predicate).ToList();
     }
 
     public void Add(Product item)
@@ -59,10 +88,13 @@ public sealed class FileCatalogStore(string path) : ICatalogStore
 
     public void Update(Product item)
     {
+        ArgumentNullException.ThrowIfNull(item);
         EnsureLoaded();
         _cache[item.Id] = item;
         Flush();
     }
+
+    bool ICatalogStore.Remove(string id) => Remove(id);
 
     public bool Remove(string id)
     {

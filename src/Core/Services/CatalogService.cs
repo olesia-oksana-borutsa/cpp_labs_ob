@@ -19,13 +19,8 @@ public sealed class CatalogService(ICatalogStore store, IEnumerable<INotificatio
     private void OnChanged(Product p, CatalogChangeKind kind, int delta)
     {
         var args = new CatalogChangedEventArgs(p.Id, kind, delta, p.Quantity);
-        
         Changed?.Invoke(this, args);
-        
-        foreach (var sink in _sinks)
-        {
-            sink.Notify(args);
-        }
+        foreach (var sink in _sinks) { sink.Notify(args); }
     }
 
     public Product Add(string sku, string name, string unit, int quantity)
@@ -38,9 +33,7 @@ public sealed class CatalogService(ICatalogStore store, IEnumerable<INotificatio
 
     public void Receive(string id, int quantity)
     {
-        var product = _store.GetById(id)
-            ?? throw new InvalidOperationException($"Немає запису з id={id}.");
-
+        var product = _store.GetById(id) ?? throw new InvalidOperationException($"Немає запису з id={id}.");
         product.RegisterArrival(quantity);
         _store.Update(product);
         OnChanged(product, CatalogChangeKind.Received, quantity);
@@ -48,9 +41,7 @@ public sealed class CatalogService(ICatalogStore store, IEnumerable<INotificatio
 
     public void Issue(string id, int quantity)
     {
-        var product = _store.GetById(id)
-            ?? throw new InvalidOperationException($"Немає запису з id={id}.");
-
+        var product = _store.GetById(id) ?? throw new InvalidOperationException($"Немає запису з id={id}.");
         product.Issue(quantity);
         _store.Update(product);
         OnChanged(product, CatalogChangeKind.Issued, -quantity);
@@ -60,27 +51,32 @@ public sealed class CatalogService(ICatalogStore store, IEnumerable<INotificatio
 
     public Product? Find(string id) => _store.GetById(id);
 
-    public IReadOnlyList<Product> FindAll(Func<Product, bool> predicate) => 
-        _store.List().Where(predicate).ToList();
+    public IReadOnlyList<Product> FindAll(Func<Product, bool> predicate) => _store.List().Where(predicate).ToList();
 
-    //  Асинхронний імпорт
-    
-    public async Task<int> ImportAsync(ICatalogImporter importer, string path, CancellationToken ct = default)
+    // дод 3: IProgress<int>? progress 
+    public async Task<int> ImportAsync(ICatalogImporter importer, string path, IProgress<int>? progress = null, CancellationToken ct = default)
     {
-        var items = await importer.LoadAsync(path, ct);
         var added = 0;
+        var processed = 0;
 
-        foreach (var item in items)
+        // дод 1: await foreach 
+        await foreach (var item in importer.LoadAsync(path, ct))
         {
             ct.ThrowIfCancellationRequested(); 
-            await Task.Delay(200, ct);
             
-            if (_store.GetById(item.Id) is not null) 
-                continue;   
+            await Task.Delay(200, ct); 
             
-            _store.Add(item);
-            OnChanged(item, CatalogChangeKind.Added, item.Quantity);
-            added++;
+            processed++;
+            
+            if (_store.GetById(item.Id) is null) 
+            {
+                _store.Add(item);
+                OnChanged(item, CatalogChangeKind.Added, item.Quantity);
+                added++;
+            }
+            
+            
+            progress?.Report(processed);
         }
 
         return added;

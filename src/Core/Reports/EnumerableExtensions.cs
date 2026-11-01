@@ -6,9 +6,15 @@ namespace Core.Reports;
 
 public static class EnumerableExtensions
 {
-    // Власний метод-розширення TopBy, який можна викликати як .TopBy(...)
-    public static IEnumerable<T> TopBy<T>(this IEnumerable<T> source, Func<T, int> keySelector, int n)
+    
+    public static IEnumerable<T> TopBy<T, TKey1, TKey2>(
+        this IEnumerable<T> source, 
+        Func<T, TKey1> primaryKeySelector, 
+        Func<T, TKey2> secondaryKeySelector, 
+        int n)
     {
-        return source.OrderByDescending(keySelector).Take(n);
+        return source.OrderByDescending(primaryKeySelector)
+                     .ThenBy(secondaryKeySelector) 
+                     .Take(n);
     }
 }
