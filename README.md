@@ -128,3 +128,30 @@ dotnet run --project src/Cli -- export`
 **cmd **
 set CROSSAPP_DATA_PATH=C:\custom_data
 dotnet run --project src/Cli -- export
+
+## Лабораторна робота 10: Minimal API
+
+Запуск API:
+`dotnet run --project src/Api`
+API працює на порту 5080. Документація OpenAPI (Scalar UI) доступна за адресою http://localhost:5080/scalar/v1 (тільки в середовищі Development).
+
+### Таблиця маршрутів
+| Метод  | Шлях                  | Тіло запиту (JSON) | Коди відповідей         |
+| ------ | --------------------- | ------------------ | ----------------------- |
+| GET    | `/api/products`       | -                  | 200 OK                  |
+| GET    | `/api/products/{id}`  | -                  | 200 OK, 404 Not Found   |
+| POST   | `/api/products`       | SaveProductRequest | 201 Created, 400 Bad Req|
+| PUT    | `/api/products/{id}`  | SaveProductRequest | 200 OK, 404, 400        |
+| DELETE | `/api/products/{id}`  | -                  | 204 No Content, 404     |
+
+### Приклади використання (cURL)
+
+**POST (Створення валідного запису):**
+```bash
+curl -i -X POST http://localhost:5080/api/products -H "Content-Type: application/json" \
+-d "{\"sku\":\"PYS-001\",\"name\":\"Писачок мідний (тонкий)\",\"unit\":\"шт\",\"quantity\":15}"
+```
+**POST (Помилка валідації 400 Bad Request):**
+```
+curl -i -X POST http://localhost:5080/api/products -H "Content-Type: application/json" \
+-d "{\"sku\":\"\",\"name\":\"X\",\"unit\":\"\",\"quantity\":-1}" ```

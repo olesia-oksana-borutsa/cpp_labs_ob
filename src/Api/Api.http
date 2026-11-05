@@ -1,0 +1,56 @@
+@Api_HostAddress = http://localhost:5080
+
+GET {{Api_HostAddress}}/api/products/
+Accept: application/json
+
+
+POST {{Api_HostAddress}}/api/products/
+Content-Type: application/json
+
+{
+  "sku": "PYS-001",
+  "name": "Писачок мідний (тонкий)",
+  "unit": "шт",
+  "quantity": 15
+}
+
+
+POST {{Api_HostAddress}}/api/products/
+Content-Type: application/json
+
+{
+  "sku": "DYE-005",
+  "name": " барвник (чорний)",
+  "unit": "упаковка",
+  "quantity": 30
+}
+
+###  400 Bad Request
+POST {{Api_HostAddress}}/api/products/
+Content-Type: application/json
+
+{
+  "sku": "",
+  "name": "X",
+  "unit": "",
+  "quantity": -1
+}
+
+###  ID (GET)
+GET {{Api_HostAddress}}/api/products/id
+Accept: application/json
+
+
+
+PUT {{Api_HostAddress}}/api/products/id
+Content-Type: application/json
+
+{
+  "sku": "PYS-001",
+  "name": "Писачок мідний (професійний, точена латунь)",
+  "unit": "шт",
+  "quantity": 10
+}
+
+
+DELETE {{Api_HostAddress}}/api/products/id
