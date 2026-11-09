@@ -152,6 +152,47 @@ curl -i -X POST http://localhost:5080/api/products -H "Content-Type: application
 -d "{\"sku\":\"PYS-001\",\"name\":\"Писачок мідний (тонкий)\",\"unit\":\"шт\",\"quantity\":15}"
 ```
 **POST (Помилка валідації 400 Bad Request):**
-```
+```bash
 curl -i -X POST http://localhost:5080/api/products -H "Content-Type: application/json" \
--d "{\"sku\":\"\",\"name\":\"X\",\"unit\":\"\",\"quantity\":-1}" ```
+-d "{\"sku\":\"\",\"name\":\"X\",\"unit\":\"\",\"quantity\":-1}" 
+```
+
+**POST (Помилка парсингу JSON 400 Bad Request):**
+```bash
+curl -i -X POST http://localhost:5080/api/products -H "Content-Type: application/json" \
+-d "{\"sku\":\"DYE-005\",\"name\":\"Барвник (чорний)\",\"unit\":\"упаковка\",\"quantity\":\"abc\"}"
+```
+
+**POST (Бізнес-помилка домену 409 Conflict):**
+```Bash
+curl -i -X POST http://localhost:5080/api/products -H "Content-Type: application/json" \
+-d "{\"sku\":\"PYS-002\",\"name\":\"Писачок латунний\",\"unit\":\"шт\",\"quantity\":-5}"
+```
+
+**GET (Отримання списку з пагінацією та пошуком 200 OK):**
+```Bash
+curl -i -X GET "http://localhost:5080/api/products?page=1&pageSize=10&search=PYS"
+```
+
+**GET (Отримання запису за ID 200 OK):**
+```Bash
+curl -i -X GET http://localhost:5080/api/products/{id}
+```
+
+**PUT (Оновлення запису 200 OK):**
+```Bash
+curl -i -X PUT http://localhost:5080/api/products/{id} -H "Content-Type: application/json" \
+-d "{\"sku\":\"PYS-001\",\"name\":\"Писачок мідний (професійний, точена латунь)\",\"unit\":\"шт\",\"quantity\":20}"
+```
+
+**DELETE (Видалення запису 204 No Content):**
+```Bash
+curl -i -X DELETE http://localhost:5080/api/products/{id}
+```
+**Тестування та збірка**
+Запуск тестів:
+
+```Bash
+dotnet test
+dotnet build
+```
